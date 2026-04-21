@@ -2,7 +2,7 @@
 #include "ISA.h"
 #include "LGPConfig.h"
 
-void LGPEngine::init(){
+void LGPEngine::init_population(){
     // sets all instructions for all programs
     for (int i = 0; i < LGPConfig::TOTAL_INSTRUCTIONS; i ++){
         data.instructions[i] = generate_instruction();
@@ -16,4 +16,3 @@ uint32_t LGPEngine::generate_instruction(){
     return ISA::encode_from_random(raw_rand); // packs and cleans bits (lose some entropy)
 }
 LGPEngine::LGPEngine():current_generation(0),current_buffer(0), rng(LGPConfig::SEED), dist_32(0,UINT32_MAX),  data(){} // constructor- kept explicitly clean- inits current buffer to 0, sets gen to 0, sets up the seed, and distribution, verbose data init
-LGPEngine::~LGPEngine(){}

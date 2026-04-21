@@ -16,7 +16,7 @@ void print_instruction(uint32_t instr) {
 
 int main() {
     LGPEngine engine;
-    engine.init();
+    engine.init_population();
 
     const PopulationData& data = engine.get_data();
 

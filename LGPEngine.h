@@ -111,7 +111,7 @@ public:
     ~LGPEngine() = default;
 
     // ---- Public evolutionary interface -------------------------------------
-    void init();                  // Randomize the initial population.
+    void init_population();                  // Randomize the initial population.
     void mutate();
     void crossover();
     int  tournament_selection();  // Returns the program index that is selected.
