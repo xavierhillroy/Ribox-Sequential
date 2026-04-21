@@ -58,6 +58,19 @@ inline uint32_t encode_from_random(uint32_t raw_rand){
     return encoded_instruct;
 }
 
-inline uint32_t
+inline uint32_t encode_manual(uint8_t op, uint8_t dest, uint8_t src1, uint8_t src2){
+    uint32_t encoded_instruct = 0; 
+    encoded_instruct |= (static_cast<uint32_t>(op & LGPConfig::OPERATION_MASK  )<< OP_SHIFT );
+    encoded_instruct |= (static_cast<uint32_t>(dest & LGPConfig::REGISTER_MASK  )<< DEST_SHIFT );
+    encoded_instruct |= (static_cast<uint32_t>(src1 & LGPConfig::REGISTER_MASK  )<< SRC1_SHIFT );
+
+    // src 2 has 2 parts, 
+     encoded_instruct |= (static_cast<uint32_t>(src2 & LGPConfig::REGISTER_MASK  )<< SRC2_SHIFT ); // compacts tthe index partt
+     encoded_instruct |= (static_cast<uint32_t>(src2 & MASK_MODE_BIT  )<< SRC2_SHIFT ); // adds flag
+
+     return encoded_instruct;
+}
+
+// DECODING NOW 
 }
 #endif // ISA 
