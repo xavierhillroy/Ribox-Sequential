@@ -52,7 +52,7 @@ namespace LGPConfig {
     constexpr int POPULATION_SIZE        = 2;    // Number of programs per generation.
                                                  // Small for now while testing;
                                                  // will be bumped up later.
-    constexpr int MAX_PROGRAM_SIZE       = 16;   // Hard cap on instructions per program.
+    constexpr int MAX_PROGRAM_SIZE       = 16;   // Hard cap on instructions per program. MAX MAX FOR NOW IS 255 because using uint8 att some places
                                                  // All programs reserve this much
                                                  // space; variable length is tracked
                                                  // separately in program_lengths[].
@@ -84,13 +84,16 @@ namespace LGPConfig {
     // pick from this list.
     // =========================================================================
 
-    constexpr int NUM_CONSTANTS  = 8;
+    constexpr int NUM_CONSTANTS  = NUM_REGISTERS;
     constexpr int CONSTANT_BITS  = log2(NUM_CONSTANTS);
     constexpr int CONSTANT_MASK  = NUM_CONSTANTS - 1;
 
-    constexpr std::array<float, NUM_CONSTANTS> CONSTANTS = {
-        0.0f, 1.0f, -1.0f, 3.14159f, 0.5f, 2.0f, 10.0f, 100.0f
-    };
+
+    constexpr auto CONSTANTS = std::to_array<float>({
+    0.0f, 1.0f, -1.0f, 3.14159f, 0.5f, 2.0f, 10.0f, 100.0f
+    });
+    static_assert(CONSTANTS.size() == NUM_CONSTANTS,
+              "CONSTANTS pool size doesn't match NUM_CONSTANTS");
 
     // The src2 index field in an instruction is 7 bits wide and is used for
     // BOTH registers (when mode=0) and constants (when mode=1). Keeping the

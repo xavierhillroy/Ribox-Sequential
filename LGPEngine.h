@@ -41,6 +41,8 @@ struct PopulationData {
     std::vector<uint8_t>  program_lengths;   // Active length of each program.
                                              // uint8_t because MAX_PROGRAM_SIZE fits
                                              // comfortably under 255.
+    statuc_assert(LGPConfig::MAX_PROGRAM_SIZE <= 255, "MAX PROGRAM SIZE LARGER THEN uint8 can store");
+
 
     // ---- Next generation (children go here during variation) ---------------
     std::vector<uint32_t> next_gen_instructions;  // Write children here during variation.

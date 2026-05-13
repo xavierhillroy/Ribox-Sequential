@@ -8,7 +8,7 @@ void LGPEngine::init_population(){
         data.instructions[i] = generate_instruction();
     }
 
-} 
+} // V easy GPU transformation 
 
 // Generates instructions
 uint32_t LGPEngine::generate_instruction(){
