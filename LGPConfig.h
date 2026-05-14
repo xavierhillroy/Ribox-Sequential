@@ -140,6 +140,8 @@ namespace LGPConfig {
 
     constexpr uint32_t SEED = 42;  // Fixed seed -> deterministic runs for testing.
 
+    constexpr uint32_t NUM_CONTEXTS = 1; // number of contexts / environments...
+
 }  // namespace LGPConfig
 
 #endif  // LGP_CONFIG_H
