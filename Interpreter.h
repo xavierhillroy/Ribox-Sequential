@@ -19,7 +19,7 @@ namespace Interpreter{
 
 void run_stateless(const uint32_t* instructions, int inst_length, const float* inputs, int num_inputs, float* outputs );
 
-    // Run statefull one program across NUM_CONTEXTS parallel contexts.
+    // Run statefull one program across NUM_CONTEXTS parallel contexts. (parallel in GPU sequential in CPU )
 //
 // instructions:  pointer to the program's flat instruction array
 // inst_length:        number of active instructions in the program (assumes max is 255)

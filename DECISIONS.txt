@@ -1,2 +1,3 @@
 - unary uses src2 so it can be either reg or constant
 - MSB is src2 const flag 
+- Using chunk processor for SR (32 lanes)

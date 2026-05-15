@@ -19,9 +19,10 @@
 // masked out during encoding.
 //
 // SRC2 is special: its high bit is a mode flag (0 = register, 1 = constant)
-// and the low 7 bits are the index into whichever pool was selected. The
+// and the low log2(NUM_REGISTERS) bits are the index into whichever pool was selected, remaining bits for future widening. The
 // constraint NUM_REGISTERS == NUM_CONSTANTS (asserted in LGPConfig.h) lets
 // the same mask handle both cases.
+// To make things cleaner although we have 8 bits for dif sources, we usually use log2(NUM_X) for indexing 
 //
 // Semantic conventions for the instruction:
 //   r[DEST] = r[SRC1]  <op>  (r[SRC2_idx] or CONSTANTS[SRC2_idx])
@@ -164,7 +165,7 @@ namespace ISA {
 
     inline uint8_t get_op(uint32_t instruction){
         // OP lives in the low byte; no shift needed.
-        return instruction & LGPConfig::OPERATION_MASK;
+        return (instruction >> OP_SHIFT) & LGPConfig::OPERATION_MASK;
     }
 
     inline uint8_t get_dest_index(uint32_t instruction){
@@ -207,8 +208,8 @@ namespace ISA {
             case SUB: return a - b;
             case MUL: return a * b;
             case DIV: return (b != 0.0f) ? a / b : 1.0f;   // protected division
-            case SIN: return std::sin(b);                  // unary: b ignored
-            case COS: return std::cos(b);                  // unary: b ignored
+            case SIN: return std::sin(b);                  // unary: a ignored
+            case COS: return std::cos(b);                  // unary: a ignored
             case LT:  return (a < b) ? 1.0f : 0.0f;
             case GT:  return (a > b) ? 1.0f : 0.0f;
             default:  return 0.0f;                          // unreachable

@@ -34,12 +34,12 @@ namespace Interpreter{
     void run_stateless(const uint32_t* instructions, int inst_length, const float* inputs, int num_inputs, float* outputs){
             // allocate registers 
             float registers[LGPConfig::NUM_CONTEXTS * LGPConfig::NUM_REGISTERS];
-
-            // init inputs and 0.1f the rest
+            static_assert(num_inputs<= LGPConfig::NUM_REGISTERS, "Num inputs > NUM_REGISTERS");
+            // init inputs and 0.0f the rest
             for(int c = 0; c < LGPConfig::NUM_CONTEXTS; ++c){
                 // store inputs
                 for (int inp = 0; inp < num_inputs; ++inp){
-                    reg(registers, c, inp) = inputs[c * num_inputs + inp]; // DIF STride to reg(num inputs stride vs num registers stride) subtle bug!
+                    reg(registers, c, inp) = inputs[c * num_inputs + inp]; // DIF STride to reg(num inputs stride vs num registers stride) !
                 }
                 
                 for (int inp = num_inputs; inp < LGPConfig::NUM_REGISTERS; ++inp){

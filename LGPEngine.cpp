@@ -1,6 +1,7 @@
 #include "LGPEngine.h"
 #include "ISA.h"
 #include "LGPConfig.h"
+#include <random>
 
 void LGPEngine::init_population(){
     // sets all instructions for all programs
