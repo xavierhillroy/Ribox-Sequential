@@ -1,6 +1,8 @@
 #include "Interpreter.h"
 #include "ISA.h"
 #include "LGPConfig.h"
+#include <cassert>
+
 // complex flattening done here for readability 
 inline static float& reg(float* registers, int c, int i ){
     return registers[c* LGPConfig::NUM_REGISTERS + i];
@@ -31,10 +33,10 @@ inline static void execute(const uint32_t* instructions, int length, float *regi
     }
 }
 namespace Interpreter{
-    void run_stateless(const uint32_t* instructions, int inst_length, const float* inputs, int num_inputs, float* outputs){
+    void run_stateless(const uint32_t* instructions, int inst_length, const float* inputs,  int num_inputs, float* outputs){
             // allocate registers 
             float registers[LGPConfig::NUM_CONTEXTS * LGPConfig::NUM_REGISTERS];
-            static_assert(num_inputs<= LGPConfig::NUM_REGISTERS, "Num inputs > NUM_REGISTERS");
+            assert(num_inputs<= LGPConfig::NUM_REGISTERS);
             // init inputs and 0.0f the rest
             for(int c = 0; c < LGPConfig::NUM_CONTEXTS; ++c){
                 // store inputs

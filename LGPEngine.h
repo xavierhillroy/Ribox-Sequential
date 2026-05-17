@@ -5,6 +5,8 @@
 #include <random>
 #include <vector>
 #include <limits>
+#include "Evaluator.h"
+#include "Dataset.h"
 
 // =============================================================================
 // PopulationData: owns all the buffers that describe the population.
@@ -71,12 +73,12 @@ struct PopulationData {
     //     the zero-fitness winners.
     // -------------------------------------------------------------------------
     PopulationData()
-        : instructions         (LGPConfig::TOTAL_INSTRUCTIONS, 0),
-          program_lengths      (LGPConfig::POPULATION_SIZE,    LGPConfig::STARTING_PROGRAM_SIZE),
+        : instructions(LGPConfig::TOTAL_INSTRUCTIONS, 0),
+          program_lengths(LGPConfig::POPULATION_SIZE,    LGPConfig::STARTING_PROGRAM_SIZE),
           next_gen_instructions(LGPConfig::TOTAL_INSTRUCTIONS, 0),
-          next_gen_lengths     (LGPConfig::POPULATION_SIZE,    0),
-          fitness_scores       (LGPConfig::POPULATION_SIZE,
-                                std::numeric_limits<float>::quiet_NaN())
+          next_gen_lengths(LGPConfig::POPULATION_SIZE,    0),
+          fitness_scores(LGPConfig::POPULATION_SIZE,
+                        std::numeric_limits<float>::quiet_NaN())
     {}
 };
 
@@ -98,34 +100,51 @@ private:
                                                    // Flipped after each variation pass.
 
     // ---- RNG ---------------------------------------------------------------
-    std::mt19937                              rng;      // Seeded with LGPConfig::SEED
+    std::mt19937 rng;      // Seeded with LGPConfig::SEED
                                                         // in the constructor.
     std::uniform_int_distribution<uint32_t>   dist_32;  // Uniform over the full
                                                         // uint32_t range; used to
                                                         // generate random instruction
                                                         // words.
+    //Population distribution, random over 0 -> popsize - 1
+    std::uniform_int_distribution<int> dist_pop;
+
+    // Members to add:
+    std::uniform_real_distribution<float> dist_unit;       // [0, 1)
+    std::uniform_int_distribution<int> dist_field;      // [0, 4]
 
     // ---- Population --------------------------------------------------------
     PopulationData data;                           // All buffers; default-constructed.
 
 public:
+
     LGPEngine();
     ~LGPEngine() = default;
+    ProgramView view_program(int i) const; // returns a program view object ( cur instruction part and cur length)
+    void evaluate_all(const Dataset& dataset); // evluates entire population... this loop will disappear on GPU - be assigned to diff warps 
 
     // ---- Public evolutionary interface -------------------------------------
     void init_population();                  // Randomize the initial population.
-    void mutate();
-    void crossover();
+    void mutate(uint32_t* program, uint8_t& length);
+    void crossover(const ProgramView& a, const ProgramView& b,
+                          uint32_t* child_a, uint8_t& child_a_len,
+                          uint32_t* child_b, uint8_t& child_b_len);
     int  tournament_selection();  // Returns the program index that is selected.
     void vary();                  // Crossover + mutation over the whole population.
     void evolve();                // Top-level evolutionary loop.
 
     const PopulationData& get_data() const { return data; } // access data for testing 
+    PopulationData& get_mutable_data() { return data; } // access data for testing 
+    uint32_t micro_mutate_instruction(uint32_t instruction);
 
 
 private:
     // ---- Internal helpers --------------------------------------------------
     uint32_t generate_instruction();  // One random, encoding-valid instruction word.
-};
+    
 
+};
+namespace Fitness {
+    float mse_to_fitness(float mse);
+}
 #endif  // LGP_ENGINE_H

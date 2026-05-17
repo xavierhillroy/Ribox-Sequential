@@ -29,7 +29,7 @@ namespace Evaluator{
                 prog.length,
                 &dataset.inputs[base  * num_inputs],  // current inputs for the each context - we mult the base (where we are at in the chunks) * the num inputs. To get the correct starting point for next input set for next chunk 
                 num_inputs,
-                output
+                outputs
             );// interpet one program on NUM contexts (Chunk)
 
             // sum cur error for chunk 
@@ -41,11 +41,7 @@ namespace Evaluator{
 
         }
         // now we have gone through all chunks lets get the MSE and properly clamp
-        const double mse = sse / double(N);
-        if (!std::isfinite(mse) || mse > double(SENTINEL_BAD_FITNESS)){
-            return SENTINEL_BAD_FITNESS; // nicely clamps invalid / corrupted fittnesses 
-        }
-        return float(mse); // cast back to float 
+        return float(sse /double(N));
 
 
     }

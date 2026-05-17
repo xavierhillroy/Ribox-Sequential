@@ -23,7 +23,7 @@ struct ProgramView{
 };
 
 namespace Evaluator {
-    constexpr float  SENTINEL_BAD_FITNESS = 1e10f; 
+    constexpr float  WORST_FITNESS = 0.0f; 
     float evaluate_sr_mse(const ProgramView& prog, const Dataset& dataset);
 }
 #endif

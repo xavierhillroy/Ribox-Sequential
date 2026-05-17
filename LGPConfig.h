@@ -49,16 +49,17 @@ namespace LGPConfig {
     // contiguously.
     // =========================================================================
 
-    constexpr int POPULATION_SIZE        = 2;    // Number of programs per generation.
+    constexpr int POPULATION_SIZE = 32;    // Number of programs per generation. MUST BE MULTIPLE OF 2... 
+    static_assert((POPULATION_SIZE%2) == 0, "POPULATION_SIZE must be mult of 2");
                                                  // Small for now while testing;
                                                  // will be bumped up later.
-    constexpr int MAX_PROGRAM_SIZE       = 16;   // Hard cap on instructions per program. MAX MAX FOR NOW IS 255 because using uint8 att some places
+    constexpr int MAX_PROGRAM_SIZE = 16;   // Hard cap on instructions per program. MAX MAX FOR NOW IS 255 because using uint8 att some places
                                                  // All programs reserve this much
                                                  // space; variable length is tracked
                                                  // separately in program_lengths[].
-    constexpr int STARTING_PROGRAM_SIZE  = 8;    // Initial length of every program
+    constexpr int STARTING_PROGRAM_SIZE = 8;    // Initial length of every program
                                                  // at generation 0.
-    constexpr int TOTAL_INSTRUCTIONS     = POPULATION_SIZE * MAX_PROGRAM_SIZE;
+    constexpr int TOTAL_INSTRUCTIONS = POPULATION_SIZE * MAX_PROGRAM_SIZE;
                                                  // Total slots in the flat buffer.
 
     // =========================================================================
@@ -68,10 +69,10 @@ namespace LGPConfig {
     // are packed into the instruction word, so NUM_REGISTERS must be a power
     // of 2 and must fit in the index field (currently 7 bits -> max 128).
     // =========================================================================
-
-    constexpr int NUM_REGISTERS  = 8;                   // MUST be a power of 2.
-    constexpr int REGISTER_BITS  = log2(NUM_REGISTERS); // Bits needed to encode an ID.
-    constexpr int REGISTER_MASK  = NUM_REGISTERS - 1;   // AND-mask that clips any value
+    // IMPORTANT MASK SIZE WILL BASICALLY SET THE BITS ACTUALLY USED TO REPRESENT THE NUM REG IN BINARY 
+    constexpr int NUM_REGISTERS = 8;                   // MUST be a power of 2.
+    constexpr int REGISTER_BITS = log2(NUM_REGISTERS); // Bits needed to encode an ID.
+    constexpr int REGISTER_MASK = NUM_REGISTERS - 1;   // AND-mask that clips any value
                                                         // to a valid register index.
                                                         // For NUM_REGISTERS=8 this is 0b111.
 
@@ -83,10 +84,10 @@ namespace LGPConfig {
     // fixed at compile time -- programs cannot evolve new constants, only
     // pick from this list.
     // =========================================================================
-
-    constexpr int NUM_CONSTANTS  = NUM_REGISTERS;
-    constexpr int CONSTANT_BITS  = log2(NUM_CONSTANTS);
-    constexpr int CONSTANT_MASK  = NUM_CONSTANTS - 1;
+    //
+    constexpr int NUM_CONSTANTS = NUM_REGISTERS;
+    constexpr int CONSTANT_BITS = log2(NUM_CONSTANTS);
+    constexpr int CONSTANT_MASK = NUM_CONSTANTS - 1; // produces 7 which is 111 
 
 
     constexpr auto CONSTANTS = std::to_array<float>({
@@ -112,9 +113,9 @@ namespace LGPConfig {
     // The concrete opcode enum lives in ISA.h (ADD, SUB, MUL, ...).
     // =========================================================================
 
-    constexpr int NUM_OPERATIONS   = 8;                    // Max 2^8 = 256 if we used the whole byte.
-    constexpr int OPERATIONS_BITS  = log2(NUM_OPERATIONS); // Active bits in the opcode field.
-    constexpr int OPERATION_MASK   = NUM_OPERATIONS - 1;   // AND-mask that clips a random byte
+    constexpr int NUM_OPERATIONS = 8;                    // Max 2^8 = 256 if we used the whole byte.
+    constexpr int OPERATIONS_BITS = log2(NUM_OPERATIONS); // Active bits in the opcode field.
+    constexpr int OPERATION_MASK = NUM_OPERATIONS - 1;   // AND-mask that clips a random byte
                                                            // to a valid opcode index.
                                                            // Example: 8 ops -> mask = 0b0000_0111.
 
@@ -126,13 +127,16 @@ namespace LGPConfig {
     // documenting semantics here as placeholders.
     // =========================================================================
 
-    constexpr float INSERT_END = 0.8f;   // P(insert at end vs. random position) in macro-mutation.
-    constexpr float POP_SWAP   = 0.75f;  // P(swap operands) micro-mutation rate.
-    constexpr float REPLACE    = 0.8f;   // P(replace instruction) macro-mutation rate.
-    constexpr float MICRO      = 0.8f;   // P(apply micro-mutation to a given instruction).
+    constexpr float INSERT_TAIL_RATE = 0.8f;   // P(insert at end vs. random position) in macro-mutation.
+    constexpr float DELETE_TAIL_RATE = 0.75f;  // P(swap operands) micro-mutation rate.
+    constexpr float REPLACE = 0.8f;   // P(replace instruction) macro-mutation rate.
+    constexpr float MICRO_RATE = 0.8f;   // P(apply micro-mutation to a given instruction).
 
-    constexpr float CROSSOVER  = 0.9f;   // P(apply crossover) per offspring.
-    constexpr float ELITES     = 0.2f;   // Fraction of population preserved as elites.
+    constexpr float CROSSOVER = 0.9f;   // P(apply crossover) per offspring.
+    constexpr float ELITES = 0.2f;   // Fraction of population preserved as elites.
+    constexpr int NUM_ELITES = POPULATION_SIZE * ELITES;
+    constexpr int TOURNAMENT_SIZE = 3;
+
 
     // =========================================================================
     // RNG

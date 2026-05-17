@@ -1,3 +1,7 @@
 - unary uses src2 so it can be either reg or constant
 - MSB is src2 const flag 
 - Using chunk processor for SR (32 lanes)
+- fitness score higher is better in tournaments, need a converter from raw score to higher is better in the Fitness namespace to handle conversion if required
+- must wrap evaluate with the conversion in evaluators
+- pick one instruct and mutate 
+- micro mutate

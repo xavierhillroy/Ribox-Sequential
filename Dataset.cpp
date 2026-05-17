@@ -4,13 +4,13 @@
 
 namespace SRTargets{
     // simple sr functions 
-    float quadratic(floatt x ){return x*x + x;}
+    float quadratic(float x ){return x*x + x;}
     float koza1(float x){return x*x*x*x + x*x*x +x*x +x;}
 }
-Dataset make_sr_dataset_1d(int N, float xmin, float xmax,float (*target_fn)(float),int num_inputs){
+Dataset make_sr_dataset_1d(int N, float xmin, float xmax,float (*target_fn)(float), uint32_t seed){
     Dataset d;
     d.N = N; 
-    d.num_inputs = num_inputs; 
+    d.num_inputs = 1; // since 1d
 
     // allocated padded inputs - padded to context size 32 ;)
     const int padded = d.padded_N();
@@ -18,7 +18,7 @@ Dataset make_sr_dataset_1d(int N, float xmin, float xmax,float (*target_fn)(floa
     d.targets.assign(padded, 0.0f);
 
     //setting up RNG using global seed we had for repro
-    std::mt19937 rng(LGPConfig::SEED);
+    std::mt19937 rng(seed);
     std::uniform_real_distribution<float> dist(xmin,xmax);
 
 

@@ -36,5 +36,5 @@ namespace SRTargets {
 
 }
 // build a dataset by sampling unifromaly from [x_min, x_max] for a single inpout target fn- determinist function used from config 
-Dataset make_sr_dataset_1d(int N, float xmin, float xmax, float (*float target_fn)(float), int num_inputs);
+Dataset make_sr_dataset_1d(int N, float xmin, float xmax, float (*target_fn)(float),uint32_t seed);
 #endif
