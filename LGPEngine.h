@@ -53,6 +53,7 @@ struct PopulationData {
     // ---- Fitness ----------------------------------------------------------
     std::vector<float>    fitness_scores;    // One per program; filled by the
                                              // evaluator.
+    std::vector<float>    next_gen_fitness_scores;
 
     // -------------------------------------------------------------------------
     // Default constructor sizes all buffers from the compile-time constants
@@ -78,7 +79,8 @@ struct PopulationData {
           next_gen_instructions(LGPConfig::TOTAL_INSTRUCTIONS, 0),
           next_gen_lengths(LGPConfig::POPULATION_SIZE,    0),
           fitness_scores(LGPConfig::POPULATION_SIZE,
-                        std::numeric_limits<float>::quiet_NaN())
+                        std::numeric_limits<float>::quiet_NaN()),
+           next_gen_fitness_scores(LGPConfig::POPULATION_SIZE, std::numeric_limits<float>::quiet_NaN())
     {}
 };
 

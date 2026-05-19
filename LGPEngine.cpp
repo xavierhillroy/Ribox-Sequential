@@ -93,6 +93,8 @@ void LGPEngine::crossover(const ProgramView& a, const ProgramView& b,
     // Cut point in [1, min(len_a, len_b)). Both children get at least one
     // instruction from each parent. If either parent is length 1, we can't
     // do a meaningful crossover -- just clone both parents.
+
+    if (dist_unit(rng) > LGPConfig::CROSSOVER_RATE) {return;}
     const int min_len = std::min(a.length, b.length);
     if (min_len < 2) {
         std::memcpy(child_a, a.instructions, a.length * sizeof(uint32_t));

@@ -132,7 +132,7 @@ namespace LGPConfig {
     constexpr float REPLACE = 0.8f;   // P(replace instruction) macro-mutation rate.
     constexpr float MICRO_RATE = 0.8f;   // P(apply micro-mutation to a given instruction).
 
-    constexpr float CROSSOVER = 0.9f;   // P(apply crossover) per offspring.
+    constexpr float CROSSOVER_RATE = 0.9f;   // P(apply crossover) per offspring.
     constexpr float ELITES = 0.2f;   // Fraction of population preserved as elites.
     constexpr int NUM_ELITES = POPULATION_SIZE * ELITES;
     constexpr int TOURNAMENT_SIZE = 3;
