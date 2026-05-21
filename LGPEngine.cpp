@@ -7,11 +7,18 @@
 #include <cassert>
 #include <iostream>
 #include <cstring>
+#include <algorithm>
+#include <numeric>
 void LGPEngine::init_population(){
     // sets all instructions for all programs
     for (int i = 0; i < LGPConfig::TOTAL_INSTRUCTIONS; i ++){
-        data.instructions[i] = generate_instruction();
+        cur_instructions_mutable()[i] = generate_instruction();
+       
     }
+       // Set initial program lengths. Using std::fill for clarity vs vector::assign.
+    std::fill(cur_lengths_mutable().begin(),
+              cur_lengths_mutable().end(),
+              static_cast<uint8_t>(LGPConfig::STARTING_PROGRAM_SIZE));
 
 } // V easy GPU transformation 
 
@@ -34,28 +41,22 @@ LGPEngine::LGPEngine()
 
 // This is program view, a method that returns the program view structure, contains length of cur prog and pointer to the start of it 
 ProgramView LGPEngine::view_program(int i) const{
-    // because we ping pong betweeen 2 buffers between generations, we must select the live buffer
-
-    const std::vector<uint32_t>& instr = (current_buffer ==0)
-    ? data.instructions
-    : data.next_gen_instructions;
-
-    // selects current live buffer for length of program
-    const std::vector<uint8_t>& lens = (current_buffer == 0)
-    ? data.program_lengths
-    : data.next_gen_lengths;
+    // because we ping pong betweeen 2 buffers between generations - live bufer selection done in accessor 
     
     return ProgramView{
-        instr.data() + i * LGPConfig::MAX_PROGRAM_SIZE, // here we are getting the raw pointer of instr vector (start) and getting the adress of the prog we are working withh
-        static_cast<int>(lens[i]) // explicitly casting to int (widening from uint 8)
+        cur_instructions().data() + i * LGPConfig::MAX_PROGRAM_SIZE, // here we are getting the raw pointer of instr vector (start) and getting the adress of the prog we are working withh
+        static_cast<int>(cur_lengths()[i]) // explicitly casting to int (widening from uint 8)
     };
 }
 void LGPEngine::evaluate_all(const Dataset& dataset){
     for (int agent = 0; agent < LGPConfig::POPULATION_SIZE; ++agent){
-        const ProgramView prog = view_program(agent);
-        data.fitness_scores[agent] = Fitness::mse_to_fitness(Evaluator::evaluate_sr_mse(prog, dataset));
+        if(std::isnan(cur_fitness()[agent])){
+            const ProgramView prog = view_program(agent);
+            cur_fitness_mutable()[agent] = Fitness::mse_to_fitness(Evaluator::evaluate_sr_mse(prog, dataset));
+        }
     }
 }
+
 float Fitness::mse_to_fitness(float mse){ // converts lower is better mse to higher is better for fitness selection
     if (!std::isfinite(mse)) return 0.0f;
     return 1.0f / (1.0f + mse);
@@ -66,14 +67,14 @@ int LGPEngine::tournament_selection(){
     //reads from the current buffer fitness fitness_scores
 
     int best_idx = dist_pop(rng); // get ran agent in population 
-    float best_fit = data.fitness_scores[best_idx]; // gets their fitness score 
+    float best_fit = cur_fitness()[best_idx]; // gets their fitness score 
 
     // make sure that fitness score is not NAN shouldnt be if evaluate all ran before xx 
     assert(!std::isnan(best_fit) && "Selection called before evaluate all (fitness NAN)");
 
     for (int agent = 1; agent < LGPConfig::TOURNAMENT_SIZE; ++agent){
         int cand = dist_pop(rng); // get ran agent in population 
-        float cand_fit = data.fitness_scores[cand]; // gets their fitness score 
+        float cand_fit = cur_fitness()[cand]; // gets their fitness score 
         assert(!std::isnan(cand_fit) && "Selection called before evaluate all (fitness NAN)");
 
         if (cand_fit > best_fit){
@@ -94,7 +95,7 @@ void LGPEngine::crossover(const ProgramView& a, const ProgramView& b,
     // instruction from each parent. If either parent is length 1, we can't
     // do a meaningful crossover -- just clone both parents.
 
-    if (dist_unit(rng) > LGPConfig::CROSSOVER_RATE) {return;}
+    // if (dist_unit(rng) > LGPConfig::CROSSOVER_RATE) {return;}
     const int min_len = std::min(a.length, b.length);
     if (min_len < 2) {
         std::memcpy(child_a, a.instructions, a.length * sizeof(uint32_t));
@@ -119,7 +120,7 @@ void LGPEngine::crossover(const ProgramView& a, const ProgramView& b,
                 (a.length - cut) * sizeof(uint32_t));
     child_b_len = static_cast<uint8_t>(a.length);
 }
-
+// Doesnt mirror crossover perfectly cuz probalistic natture baked into method... oops 
 // this metthod could cause divergence on GPU 
 void LGPEngine::mutate(uint32_t* program, uint8_t& length) {
     if (length == 0) return;
@@ -177,4 +178,79 @@ uint32_t LGPEngine::micro_mutate_instruction(uint32_t instr) {
         }
     }
     return instr;  // unreachable
+}
+void LGPEngine::vary_pair(int dstA, int dstB){
+    // get parents 
+    int pA_idx = tournament_selection();
+    int pB_idx = tournament_selection();
+    ProgramView pA = view_program(pA_idx);
+    ProgramView pB = view_program(pB_idx);
+
+    // buffers chidren
+    uint32_t* childA_buf = next_gen_ptr(dstA);
+    uint32_t* childB_buf = next_gen_ptr(dstB);
+    uint8_t& childA_length = next_lengths()[dstA];
+    uint8_t& childB_length = next_lengths()[dstB];
+
+    
+
+    // if we dont crossover
+    if (!(dist_unit(rng) < LGPConfig::CROSSOVER_RATE)){
+    //clone parents 
+        std::memcpy(childA_buf, pA.instructions, pA.length * sizeof(uint32_t) );// copy it exactly, destination, source, size in bytes
+        std::memcpy(childB_buf, pB.instructions, pB.length * sizeof(uint32_t));
+
+        childA_length = pA.length;
+        childB_length = pB.length;
+    }
+    else{
+        crossover(pA, pB, childA_buf, childA_length, childB_buf, childB_length);
+    }
+    // now do the mutation
+    mutate(childA_buf, childA_length);
+    mutate(childB_buf, childB_length);
+
+    // set their fitness as Nan 
+    next_fitness()[dstA] = std::numeric_limits<float>::quiet_NaN();
+    next_fitness()[dstB] = std::numeric_limits<float>::quiet_NaN();
+}
+std::vector<int> LGPEngine::top_k_indices(int k) const{
+    // create vector of popsize and fill with numfrom 0 to popsize - 1
+    std::vector<int> idx(LGPConfig::POPULATION_SIZE);
+    std::iota(idx.begin(), idx.end(), 0);
+
+    const auto& fit = cur_fitness(); // get reference to cur fitness vectors 
+
+    // sort by top k indices 
+    // get iterator for being, sorts up to iterator + k, sort partial from it begin to it end. 
+    // lambda as comparator to sort indices by their fitness
+    std::partial_sort(idx.begin(), idx.begin() + k, idx.end(), [&fit](int a, int b){return fit[a]> fit[b];}); // uses lambda to sort indices by fitness 
+    idx.resize(k); // resize to k elements idx of top k fittest individuals 
+    return idx;
+
+}
+// WORTH CONSIDERING IN GPU PORT - this COPY Program copies dif amount based on length woould 
+void LGPEngine::copy_elite_to_next(int srcIdx, int dstIdx){
+    const uint32_t* source = cur_instructions().data() + srcIdx * LGPConfig::MAX_PROGRAM_SIZE; // ptr to start of program at srcIdx  in current buffer (pointer to program at s)
+    uint32_t* dest = next_gen_ptr(dstIdx); // pointer to program at destination index in next gen buffer 
+    uint8_t length = cur_lengths()[srcIdx]; // lenght of program we are copying 
+
+    // now the memcopy 
+    std::memcpy(dest, source, sizeof(uint32_t) * length);
+    next_lengths()[dstIdx] = length;
+    next_fitness()[dstIdx] = cur_fitness()[srcIdx];
+}
+
+void LGPEngine::vary(){
+    // fill elites - carries over length and fitness and all that good stuff 
+    std::vector<int> topK = top_k_indices(LGPConfig::ELITE_COUNT);
+
+    for (int e = 0; e < LGPConfig::ELITE_COUNT; ++e){
+        copy_elite_to_next(topK[e], e);
+    }
+    // populate with real variation 
+    for (int children = LGPConfig::ELITE_COUNT; children < LGPConfig::POPULATION_SIZE; children +=2){
+        vary_pair(children, children +1); // passing in destination indices 
+    }
+    flip_generation();
 }

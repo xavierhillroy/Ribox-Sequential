@@ -134,7 +134,10 @@ namespace LGPConfig {
 
     constexpr float CROSSOVER_RATE = 0.9f;   // P(apply crossover) per offspring.
     constexpr float ELITES = 0.2f;   // Fraction of population preserved as elites.
-    constexpr int NUM_ELITES = POPULATION_SIZE * ELITES;
+    constexpr int ELITE_COUNT = static_cast<int>(LGPConfig::POPULATION_SIZE * LGPConfig::ELITES);
+    constexpr int NON_ELITE_COUNT = LGPConfig::POPULATION_SIZE - ELITE_COUNT;
+    static_assert(NON_ELITE_COUNT % 2 == 0,
+              "Non-elite slots must be even -- vary_pair produces two children");
     constexpr int TOURNAMENT_SIZE = 3;
 
 

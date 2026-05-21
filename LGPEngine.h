@@ -18,18 +18,18 @@
 // engine logic, and (b) tests can construct a PopulationData in isolation.
 //
 // Memory layout recap (see LGPConfig.h for the "why"):
-//   - instructions[]:    flat buffer of TOTAL_INSTRUCTIONS uint32_t words.
+//   - instructions[2][]:    flat buffer of TOTAL_INSTRUCTIONS uint32_t words.
 //                        Program i occupies the slice
 //                          [i * MAX_PROGRAM_SIZE, i * MAX_PROGRAM_SIZE + program_lengths[i])
 //                        Slots past program_lengths[i] exist but aren't
-//                        executed.
+//                        executed.- 
 //   - program_lengths[]: one byte per program; gates how far the interpreter
 //                        walks into that program's slice.
 //
-// Two parallel "next-gen" buffers implement ping-pong double-buffering for
+// three parallel "next-gen" buffers implement ping-pong double-buffering for
 // variation: children are written into next_gen_* while the current
 // generation remains readable. After variation completes, the engine flips
-// a pointer/flag (current_buffer) to swap roles rather than copying. This
+// a pointer/flag  to swap roles rather than copying. This
 // avoids allocation churn per generation and mirrors how the GPU version
 // will want to work.
 // =============================================================================
@@ -38,22 +38,13 @@
 struct PopulationData {
 
     // ---- Current generation ------------------------------------------------
-    std::vector<uint32_t> instructions;      // Flat buffer of all programs'
+    std::vector<uint32_t> instructions_buf[2];      // Flat buffer of all programs'
                                              // instructions; size = TOTAL_INSTRUCTIONS.
-    std::vector<uint8_t>  program_lengths;   // Active length of each program.
+    std::vector<uint8_t>  program_lengths_buf[2];   // Active length of each program.
                                              // uint8_t because MAX_PROGRAM_SIZE fits
                                              // comfortably under 255.
     static_assert(LGPConfig::MAX_PROGRAM_SIZE <= 255, "MAX PROGRAM SIZE LARGER THEN uint8 can store");
-
-
-    // ---- Next generation (children go here during variation) ---------------
-    std::vector<uint32_t> next_gen_instructions;  // Write children here during variation.
-    std::vector<uint8_t>  next_gen_lengths;       // Child lengths.
-
-    // ---- Fitness ----------------------------------------------------------
-    std::vector<float>    fitness_scores;    // One per program; filled by the
-                                             // evaluator.
-    std::vector<float>    next_gen_fitness_scores;
+    std::vector<float>fitness_scores_buf[2];
 
     // -------------------------------------------------------------------------
     // Default constructor sizes all buffers from the compile-time constants
@@ -61,27 +52,25 @@ struct PopulationData {
     // No manual resize() calls at the use site.
     //
     // Initialization values chosen deliberately:
-    //   - instructions / next_gen_instructions -> 0: zero-filled instruction
+    //   - instructions[i] -> 0: zero-filled instruction
     //     slots decode to a valid (if meaningless) instruction, so a missed
     //     init() can't produce UB in the interpreter.
     //   - program_lengths -> STARTING_PROGRAM_SIZE: same defensive reasoning.
     //     A missed init() still leaves every program with a valid length.
-    //   - next_gen_lengths -> 0: children don't exist yet; variation fills
-    //     these in.
+    //   -
     //   - fitness_scores -> NaN: sentinel for "not yet evaluated". Any
     //     comparison with NaN returns false, so selection run on an
     //     unevaluated population fails visibly rather than silently picking
     //     the zero-fitness winners.
     // -------------------------------------------------------------------------
-    PopulationData()
-        : instructions(LGPConfig::TOTAL_INSTRUCTIONS, 0),
-          program_lengths(LGPConfig::POPULATION_SIZE,    LGPConfig::STARTING_PROGRAM_SIZE),
-          next_gen_instructions(LGPConfig::TOTAL_INSTRUCTIONS, 0),
-          next_gen_lengths(LGPConfig::POPULATION_SIZE,    0),
-          fitness_scores(LGPConfig::POPULATION_SIZE,
-                        std::numeric_limits<float>::quiet_NaN()),
-           next_gen_fitness_scores(LGPConfig::POPULATION_SIZE, std::numeric_limits<float>::quiet_NaN())
-    {}
+    PopulationData(){
+        for (int b =0; b <2; ++b){
+            instructions_buf[b].assign(LGPConfig::TOTAL_INSTRUCTIONS, 0);
+            program_lengths_buf[b].assign(LGPConfig::POPULATION_SIZE, 255);// invalid sentinel is 255 ( largest val we can read in uint8 )
+            fitness_scores_buf[b].assign(LGPConfig::POPULATION_SIZE, std::numeric_limits<float>::quiet_NaN());
+        }
+    }
+   
 };
 
 // =============================================================================
@@ -118,6 +107,7 @@ private:
     // ---- Population --------------------------------------------------------
     PopulationData data;                           // All buffers; default-constructed.
 
+
 public:
 
     LGPEngine();
@@ -138,13 +128,57 @@ public:
     const PopulationData& get_data() const { return data; } // access data for testing 
     PopulationData& get_mutable_data() { return data; } // access data for testing 
     uint32_t micro_mutate_instruction(uint32_t instruction);
+    
+    void vary_pair(int dstA, int dstB);
+    
+    int current_buffer_index() const { return current_buffer; }
+    
 
 
 private:
     // ---- Internal helpers --------------------------------------------------
     uint32_t generate_instruction();  // One random, encoding-valid instruction word.
-    
 
+    // readers
+    const std::vector<uint32_t>& cur_instructions() const{ // returns reference to current instruction buffer 
+        return data.instructions_buf[current_buffer];
+    } 
+    const std::vector<uint8_t>& cur_lengths() const {
+        return data.program_lengths_buf[current_buffer];
+    }
+    const std::vector<float>& cur_fitness() const{
+        return data.fitness_scores_buf[current_buffer];
+    }
+    // write accessor - where to write next gen + Current gen fitness  - (KEY THESE GIVE YOU THE NEXT GEN EMBEDDED)
+    std::vector<uint32_t>& next_instructions(){
+        return data.instructions_buf[1 - current_buffer ]; //if buff is 0, 1 - 0 = 1 flips, if buff is 1, 1-1  = 0, so it flips 
+    }
+    std::vector<uint8_t>& next_lengths(){
+        return data.program_lengths_buf[1 - current_buffer];
+    }
+    std::vector<float>& next_fitness(){
+        return data.fitness_scores_buf[1 - current_buffer];
+    }
+
+    std::vector<float>& cur_fitness_mutable(){
+        return data.fitness_scores_buf[current_buffer];
+    }
+    std::vector<uint32_t>& cur_instructions_mutable(){
+        return data.instructions_buf[current_buffer];
+    }
+    std::vector<uint8_t>& cur_lengths_mutable()  {
+        return data.program_lengths_buf[current_buffer];
+    }
+    void flip_generation(){
+        current_buffer = 1 - current_buffer;
+    }
+    uint32_t* next_gen_ptr(int i){ // gives us the pointer to the start of program at index i of next gen ss
+        return next_instructions().data()+ i * LGPConfig::MAX_PROGRAM_SIZE;
+    }
+    std::vector<int> top_k_indices(int k) const;
+
+    void copy_elite_to_next(int srcIdx, int dstIdx); //given idx from source program from cur gen, copy that program to next gen at a the dstIndex - for elites... we copy fitness too!
+    
 };
 namespace Fitness {
     float mse_to_fitness(float mse);

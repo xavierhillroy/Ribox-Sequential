@@ -46,17 +46,20 @@ void test_engine_init_invariants() {
     const PopulationData& data = engine.get_data();
 
     // Structural invariants
-    assert(data.instructions.size()    == LGPConfig::TOTAL_INSTRUCTIONS);
-    assert(data.program_lengths.size() == LGPConfig::POPULATION_SIZE);
-    assert(data.fitness_scores.size()  == LGPConfig::POPULATION_SIZE);
+    assert(data.instructions_buf[0].size()    == LGPConfig::TOTAL_INSTRUCTIONS);
+    assert(data.program_lengths_buf[0].size() == LGPConfig::POPULATION_SIZE);
+    assert(data.fitness_scores_buf[0].size()  == LGPConfig::POPULATION_SIZE);
+    assert(data.instructions_buf[0].size()    == LGPConfig::TOTAL_INSTRUCTIONS);
+    assert(data.program_lengths_buf[0].size() == LGPConfig::POPULATION_SIZE);
+    assert(data.fitness_scores_buf[0].size()  == LGPConfig::POPULATION_SIZE);
 
     // Every program should have the starting length
-    for (auto len : data.program_lengths) {
+    for (auto len : data.program_lengths_buf[0]) {
         assert(len == LGPConfig::STARTING_PROGRAM_SIZE);
     }
 
     // Fitness should still be NaN sentinel (we haven't evaluated)
-    for (auto f : data.fitness_scores) {
+    for (auto f : data.fitness_scores_buf[0]) {
         assert(std::isnan(f));
     }
 }
@@ -69,8 +72,8 @@ void test_engine_init_decoded_fields_valid() {
     // Every decoded instruction in the active range should have valid fields
     for (int p = 0; p < LGPConfig::POPULATION_SIZE; ++p) {
         int base = p * LGPConfig::MAX_PROGRAM_SIZE;
-        for (int i = 0; i < data.program_lengths[p]; ++i) {
-            uint32_t instr = data.instructions[base + i];
+        for (int i = 0; i < data.program_lengths_buf[0][p]; ++i) {
+            uint32_t instr = data.instructions_buf[0][base + i];
             assert(ISA::get_op(instr)         < LGPConfig::NUM_OPERATIONS);
             assert(ISA::get_dest_index(instr) < LGPConfig::NUM_REGISTERS);
             assert(ISA::get_src1_index(instr) < LGPConfig::NUM_REGISTERS);
@@ -376,7 +379,7 @@ void test_engine_evaluate_all_populates_fitness() {
 
     engine.evaluate_all(d);
 
-    const auto& fit = engine.get_data().fitness_scores;
+    const auto& fit = engine.get_data().fitness_scores_buf[0];
     for (auto f : fit) {
         
         assert(!std::isnan(f));
@@ -393,8 +396,8 @@ void test_engine_view_program_slicing() {
     for (int i = 0; i < LGPConfig::POPULATION_SIZE; ++i) {
         ProgramView v = engine.view_program(i);
         assert(v.instructions ==
-               data.instructions.data() + i * LGPConfig::MAX_PROGRAM_SIZE);
-        assert(v.length == data.program_lengths[i]);
+               data.instructions_buf[0].data() + i * LGPConfig::MAX_PROGRAM_SIZE);
+        assert(v.length == data.program_lengths_buf[0][i]);
     }
 }
 void test_tournament_returns_valid_index() {
@@ -414,7 +417,7 @@ void test_tournament_prefers_best() {
     LGPEngine engine;
     engine.init_population();
     // Inject known fitness: index 0 is best, everyone else is worst.
-    auto& scores = engine.get_mutable_data().fitness_scores;
+    auto& scores = engine.get_mutable_data().fitness_scores_buf[0];
     std::fill(scores.begin(), scores.end(), 0.0f);
     scores[0] = 1.0f;
 
@@ -939,6 +942,270 @@ void test_mutate_at_min_length_no_underflow() {
     for (int trial = 0; trial < 2000; ++trial) {
         engine.mutate(buf, len);
         assert(len >= 1);
+    }
+}
+// =============================================================================
+// vary_pair / vary tests
+//
+// These exercise the full variation pipeline. They need access to internals
+// (current_buffer, the next-gen buffers) that aren't otherwise exposed, so a
+// few of them lean on get_data() / get_mutable_data() and read the buffers
+// directly via the [2] arrays.
+//
+// IMPORTANT: vary_pair and vary write into the NEXT-gen buffer. Before vary()
+// flips, "next" = data.*_buf[1 - current_buffer]. After vary() flips, the old
+// next-gen becomes current. Tests must be careful about which buffer they read
+// at which point.
+//
+// Several tests need a populated, evaluated current generation as a
+// precondition (vary_pair calls tournament_selection, which asserts on NaN
+// fitness). The setup helper below handles that.
+// =============================================================================
+
+// Run the standard "ready to vary" setup: init + evaluate so the current
+// buffer has valid fitness and tournament_selection won't trip its NaN assert.
+static void setup_evaluated_engine(LGPEngine& engine, const Dataset& d) {
+    engine.init_population();
+    engine.evaluate_all(d);
+}
+
+// Helper: index of the current live buffer, inferred indirectly. We don't have
+// a public getter for current_buffer, so detect it by comparing fitness arrays:
+// the current buffer is the one whose fitness is fully non-NaN after evaluate.
+// (Cheap and avoids adding a getter purely for tests. If you'd rather, add a
+//  public `int current_buffer_index() const { return current_buffer; }`.)
+static int detect_current_buffer(const PopulationData& data) {
+    bool buf0_all_finite = true;
+    for (float f : data.fitness_scores_buf[0]) {
+        if (std::isnan(f)) { buf0_all_finite = false; break; }
+    }
+    return buf0_all_finite ? 0 : 1;
+}
+
+// -----------------------------------------------------------------------------
+// vary_pair
+// -----------------------------------------------------------------------------
+
+void test_vary_pair_writes_valid_children() {
+    // After vary_pair, both destination slots in next-gen must:
+    //   - have length in [1, MAX]
+    //   - decode to valid fields across the active range
+    //   - have NaN fitness (marked unevaluated)
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    const PopulationData& data = engine.get_data();
+    const int cur = detect_current_buffer(data);
+    const int nxt = 1 - cur;
+
+    // Use destination slots 0 and 1 in next-gen.
+    engine.vary_pair(0, 1);
+
+    for (int slot : {0, 1}) {
+        const uint8_t len = data.program_lengths_buf[nxt][slot];
+        assert(len >= 1);
+        assert(len <= LGPConfig::MAX_PROGRAM_SIZE);
+
+        const uint32_t* prog =
+            data.instructions_buf[nxt].data() + slot * LGPConfig::MAX_PROGRAM_SIZE;
+        for (int i = 0; i < len; ++i) {
+            assert(ISA::get_op(prog[i])         < LGPConfig::NUM_OPERATIONS);
+            assert(ISA::get_dest_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+            assert(ISA::get_src1_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+            assert(ISA::get_src2_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+        }
+
+        // Children must be marked unevaluated.
+        assert(std::isnan(data.fitness_scores_buf[nxt][slot]));
+    }
+}
+
+void test_vary_pair_both_children_marked_nan() {
+    // Specifically targets the "both lines write dstA" typo class: BOTH
+    // destination fitness slots must be NaN, not just the first. If only
+    // dstA were invalidated, dstB would carry a stale (non-NaN) value.
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    PopulationData& data = engine.get_mutable_data();
+    const int cur = detect_current_buffer(data);
+    const int nxt = 1 - cur;
+
+    // Pre-poison both next-gen fitness slots with a finite value so we can
+    // tell whether vary_pair actually overwrites them with NaN.
+    data.fitness_scores_buf[nxt][0] = 123.0f;
+    data.fitness_scores_buf[nxt][1] = 456.0f;
+
+    engine.vary_pair(0, 1);
+
+    assert(std::isnan(data.fitness_scores_buf[nxt][0]));
+    assert(std::isnan(data.fitness_scores_buf[nxt][1]));  // the load-bearing one
+}
+
+void test_vary_pair_does_not_touch_current_buffer() {
+    // vary_pair reads parents from current and writes children to next.
+    // It must not modify the current buffer. Snapshot current instructions
+    // and lengths before, compare after.
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    PopulationData& data = engine.get_mutable_data();
+    const int cur = detect_current_buffer(data);
+
+    std::vector<uint32_t> cur_instr_before = data.instructions_buf[cur];
+    std::vector<uint8_t>  cur_len_before   = data.program_lengths_buf[cur];
+
+    engine.vary_pair(0, 1);
+
+    assert(data.instructions_buf[cur]   == cur_instr_before);
+    assert(data.program_lengths_buf[cur] == cur_len_before);
+}
+
+// -----------------------------------------------------------------------------
+// vary
+// -----------------------------------------------------------------------------
+
+void test_vary_flips_buffer() {
+    // vary() must flip current_buffer. Detect the live buffer before and after;
+    // they must differ.
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    const int before = detect_current_buffer(engine.get_data());
+    engine.vary();
+    // After vary, the new current buffer holds elite carry-forward fitness
+    // (finite) for elite slots and NaN for everyone else. detect_current_buffer
+    // looks for an all-finite buffer, which post-vary is NOT guaranteed (the
+    // new current has NaN children). So detect via the OTHER signal: the old
+    // current buffer should still be fully finite, the new one should have NaNs.
+    //
+    // Simpler: just assert the engine no longer reports the same buffer as the
+    // all-finite one. Re-evaluate to restore the invariant, then detect.
+    engine.evaluate_all(d);
+    const int after = detect_current_buffer(engine.get_data());
+    assert(after != before);
+}
+
+void test_vary_produces_evaluable_population() {
+    // The integration smoke test. After a full generation cycle, the new
+    // population must be fully evaluable and selectable without tripping the
+    // NaN assert in tournament_selection.
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    engine.vary();
+    engine.evaluate_all(d);
+
+    // Every fitness must now be finite and in [0, 1].
+    const auto& fit = engine.get_data().fitness_scores_buf[
+        detect_current_buffer(engine.get_data())];
+    for (float f : fit) {
+        assert(!std::isnan(f));
+        assert(f >= 0.0f);
+        assert(f <= 1.0f);
+    }
+
+    // Tournament must run cleanly many times.
+    for (int i = 0; i < 100; ++i) {
+        int idx = engine.tournament_selection();
+        assert(idx >= 0 && idx < LGPConfig::POPULATION_SIZE);
+    }
+}
+
+void test_vary_all_slots_valid_after_generation() {
+    // After vary() + evaluate, every program (elite or child) must decode to
+    // valid fields across its active range, with length in [1, MAX].
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    engine.vary();
+    engine.evaluate_all(d);
+
+    const PopulationData& data = engine.get_data();
+    const int cur = detect_current_buffer(data);
+
+    for (int p = 0; p < LGPConfig::POPULATION_SIZE; ++p) {
+        const uint8_t len = data.program_lengths_buf[cur][p];
+        assert(len >= 1);
+        assert(len <= LGPConfig::MAX_PROGRAM_SIZE);
+
+        const uint32_t* prog =
+            data.instructions_buf[cur].data() + p * LGPConfig::MAX_PROGRAM_SIZE;
+        for (int i = 0; i < len; ++i) {
+            assert(ISA::get_op(prog[i])         < LGPConfig::NUM_OPERATIONS);
+            assert(ISA::get_dest_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+            assert(ISA::get_src1_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+            assert(ISA::get_src2_index(prog[i]) < LGPConfig::NUM_REGISTERS);
+        }
+    }
+}
+
+void test_vary_multi_generation_stability() {
+    // Run many full generation cycles. The population must remain valid and
+    // evaluable the whole way -- catches bugs that only surface after several
+    // buffer flips (e.g. an accessor that doesn't actually swap, or stale-tail
+    // corruption that compounds over generations).
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    for (int gen = 0; gen < 50; ++gen) {
+        engine.vary();
+        engine.evaluate_all(d);
+
+        const PopulationData& data = engine.get_data();
+        const int cur = detect_current_buffer(data);
+        for (int p = 0; p < LGPConfig::POPULATION_SIZE; ++p) {
+            const uint8_t len = data.program_lengths_buf[cur][p];
+            assert(len >= 1 && len <= LGPConfig::MAX_PROGRAM_SIZE);
+            assert(!std::isnan(data.fitness_scores_buf[cur][p]));
+        }
+    }
+}
+
+void test_vary_best_fitness_non_decreasing_with_elitism() {
+    // With elitism (ELITE_COUNT > 0), the best fitness in the population must
+    // never DROP from one generation to the next -- the best programs are
+    // carried forward verbatim, so the new best is at least as good.
+    //
+    // Skips itself if ELITE_COUNT == 0 (e.g. at POPULATION_SIZE = 2, where
+    // 2 * 0.2 truncates to 0). Without elitism, best fitness can drop, so the
+    // assertion wouldn't hold.
+    if (LGPConfig::ELITE_COUNT == 0) {
+        std::cout << "    (skipped: ELITE_COUNT == 0 at this POPULATION_SIZE)\n";
+        return;
+    }
+
+    Dataset d = make_sr_dataset_1d(50, -1, 1, SRTargets::quadratic, 1, 42);
+    LGPEngine engine;
+    setup_evaluated_engine(engine, d);
+
+    auto best_fitness = [&]() {
+        const PopulationData& data = engine.get_data();
+        const int cur = detect_current_buffer(data);
+        float best = -1.0f;
+        for (float f : data.fitness_scores_buf[cur]) {
+            if (f > best) best = f;
+        }
+        return best;
+    };
+
+    float prev_best = best_fitness();
+    for (int gen = 0; gen < 30; ++gen) {
+        engine.vary();
+        engine.evaluate_all(d);
+        const float cur_best = best_fitness();
+        // Allow a tiny epsilon for float recomputation noise on the carried-
+        // forward elite (its fitness is copied, not recomputed, so this should
+        // actually be exact -- but epsilon guards against any surprise).
+        assert(cur_best >= prev_best - 1e-6f);
+        prev_best = cur_best;
     }
 }
 // =============================================================================
