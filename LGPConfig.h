@@ -35,7 +35,7 @@ namespace LGPConfig {
     // Evolutionary loop parameters
     // =========================================================================
 
-    constexpr int MAX_GENERATIONS = 1000;  // Outer loop cap on the evolutionary run.
+    constexpr int MAX_GENERATIONS = 10000;  // Outer loop cap on the evolutionary run.
 
     // =========================================================================
     // Population and program sizing
@@ -53,7 +53,7 @@ namespace LGPConfig {
     static_assert((POPULATION_SIZE%2) == 0, "POPULATION_SIZE must be mult of 2");
                                                  // Small for now while testing;
                                                  // will be bumped up later.
-    constexpr int MAX_PROGRAM_SIZE = 100;   // Hard cap on instructions per program. MAX MAX FOR NOW IS 255 because using uint8 att some places
+    constexpr int MAX_PROGRAM_SIZE = 64;   // Hard cap on instructions per program. MAX MAX FOR NOW IS 255 because using uint8 att some places
                                                  // All programs reserve this much
                                                  // space; variable length is tracked
                                                  // separately in program_lengths[].
@@ -134,7 +134,7 @@ namespace LGPConfig {
     constexpr float MICRO_RATE = 0.8f;   // P(apply micro-mutation to a given instruction).
 
     constexpr float CROSSOVER_RATE = 0.9f;   // P(apply crossover) per offspring.
-    constexpr float ELITES = 0.2f;   // Fraction of population preserved as elites.
+    constexpr float ELITES = 0.1f;   // Fraction of population preserved as elites.
     constexpr int ELITE_COUNT = static_cast<int>(LGPConfig::POPULATION_SIZE * LGPConfig::ELITES);
     constexpr int NON_ELITE_COUNT = LGPConfig::POPULATION_SIZE - ELITE_COUNT;
     static_assert(NON_ELITE_COUNT % 2 == 0,

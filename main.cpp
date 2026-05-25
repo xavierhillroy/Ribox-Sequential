@@ -31,7 +31,7 @@ int main() {
     // --- Real problem: f(x) = x*x + x -------------------------------------
     {
         std::cout << "--- f(x) = x*x + x (quadratic) ---\n";
-        Dataset d = make_sr_dataset_1d(64, -2.0f, 2.0f, SRTargets::koza1, 42);
+        Dataset d = make_sr_dataset_1d(64, -2.0f, 2.0f, SRTargets::koza3, 42);
         LGPEngine engine;
         engine.evolve_sr(d);
         engine.print_history();

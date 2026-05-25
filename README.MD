@@ -169,7 +169,3 @@ covered by the test suite. Items being carried into the GPU work:
 - **Variable program length under warp execution.** Works (all 32 lanes run the
   same program, so lane counts match), but its interaction with crossover across
   the population is worth revisiting on GPU.
-- **Nsight profiling.** Familiarization with Nsight Systems (launch overhead,
-  transfers, concurrency) and Nsight Compute (warp efficiency, occupancy,
-  throughput) begins in parallel. Warp efficiency in particular will be the
-  empirical evidence for the central claim.

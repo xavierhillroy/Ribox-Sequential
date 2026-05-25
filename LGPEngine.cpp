@@ -323,16 +323,55 @@ void LGPEngine::print_history() const {
                   <<s.mean_length <<"\n";
     }
 }
+// Helper: opcode -> printable symbol. Lives near print_best_program (or in
+// ISA.h if you want it shared). Returns infix symbol for binary ops, a name
+// for unary/function ops.
+static const char* op_symbol(uint8_t op) {
+    switch (op) {
+        case ISA::ADD: return "+";
+        case ISA::SUB: return "-";
+        case ISA::MUL: return "*";
+        case ISA::DIV: return "/";
+        case ISA::LT:  return "<";
+        case ISA::GT:  return ">";
+        case ISA::SIN: return "sin";
+        case ISA::COS: return "cos";
+        default:       return "?";
+    }
+}
+
 void LGPEngine::print_best_program() const {
     const GenerationStats& last = history.back();
     const uint32_t* prog = cur_instructions().data()
                          + last.best_index * LGPConfig::MAX_PROGRAM_SIZE;
+
     std::cout << "Best program (fitness " << last.best_fitness
               << ", length " << last.best_length << "):\n";
+
     for (int i = 0; i < last.best_length; ++i) {
-        // reuse your print_instruction from test_bed, or inline a decode
-        std::cout << "  [" << i << "] op=" << (int)ISA::get_op(prog[i])
-                  << " dest=r" << (int)ISA::get_dest_index(prog[i])
-                  << " ...\n";
+        const uint32_t instr = prog[i];
+        const uint8_t  op    = ISA::get_op(instr);
+        const uint8_t  dest  = ISA::get_dest_index(instr);
+        const uint8_t  src1  = ISA::get_src1_index(instr);
+        const uint8_t  src2  = ISA::get_src2_index(instr);
+        const bool     s2c   = ISA::is_src2_constant(instr);
+
+        std::cout << "  [" << i << "] r" << (int)dest << " = ";
+
+        if (op == ISA::SIN || op == ISA::COS) {
+            // Unary: reads src2 (which may be a register or a constant),
+            // ignores src1. Print the function form.
+            std::cout << op_symbol(op) << "(";
+            if (s2c) std::cout << LGPConfig::CONSTANTS[src2];
+            else     std::cout << "r" << (int)src2;
+            std::cout << ")";
+        } else {
+            // Binary: r[src1] <op> (r[src2] or CONSTANTS[src2])
+            std::cout << "r" << (int)src1 << " " << op_symbol(op) << " ";
+            if (s2c) std::cout << LGPConfig::CONSTANTS[src2];
+            else     std::cout << "r" << (int)src2;
+        }
+
+        std::cout << "\n";
     }
 }

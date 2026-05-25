@@ -7,6 +7,12 @@ namespace SRTargets{
     float quadratic(float x ){return x*x + x;}
     float koza1(float x){return x*x*x*x + x*x*x +x*x +x;}
     float identity(float x) {return x;} 
+    float koza3(float x) {
+        const float x2 = x * x;
+        const float x3 = x2 * x;
+        const float x5 = x3 * x2;
+        return x5 - 2.0f * x3 + x;
+    }
 }
 Dataset make_sr_dataset_1d(int N, float xmin, float xmax,float (*target_fn)(float), uint32_t seed){
     Dataset d;
