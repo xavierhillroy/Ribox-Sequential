@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include "LGPConfig.h"
+#include <fstream>
 // =============================================================================
 // Dataset: inputs and targets for symbolic regression.
 //
@@ -23,11 +24,18 @@ struct Dataset {
     std::vector<float> targets; /// size = padded_N
     int N; 
     int num_inputs; // num inputs of sr equation 
+    // Variance of the target over the N valid points: SS_tot = Σ(y - ȳ)².
+    // Constant per dataset, so computed once at construction and reused by
+    // the R² evaluator instead of being recomputed per fitness call.
+    // 0.0 means a degenerate (constant) target -> R² undefined.
+    double ss_tot = 0.0;
+
 
     int padded_N() const {
         const int c = LGPConfig::NUM_CONTEXTS;
         return((N + c -1)/c)*c ;
     }
+    
 
 };
 namespace SRTargets {
@@ -37,6 +45,18 @@ namespace SRTargets {
     float koza3(float x);
 
 }
+namespace Nguyen{
+    float Nguyen_1(float x);
+    float Nguyen_2(float x);
+    float Nguyen_3(float x);
+    float Nguyen_4(float x);
+    float Nguyen_5(float x);
+    float Nguyen_6(float x);
+
+
+}
 // build a dataset by sampling unifromaly from [x_min, x_max] for a single inpout target fn- determinist function used from config 
 Dataset make_sr_dataset_1d(int N, float xmin, float xmax, float (*target_fn)(float),uint32_t seed);
+
+void write_csv(const Dataset& d, const std::string& path);
 #endif

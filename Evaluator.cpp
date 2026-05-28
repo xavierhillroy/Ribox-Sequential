@@ -42,7 +42,46 @@ namespace Evaluator{
         }
         // now we have gone through all chunks lets get the MSE and properly clamp
         return float(sse /double(N));
-
-
     }
+    // Returns coefficient-of-determination R^2 = 1 - SS_res/SS_tot.
+    // Higher is better, <= 1.0. Can go negative for models worse than the mean.
+    // The caller (fitness adapter) is responsible for flooring negatives to 0.
+    float evaluate_sr_r2(const ProgramView& prog, const Dataset& dataset){
+        constexpr int CHUNK = LGPConfig::NUM_CONTEXTS;
+        const int N = dataset.N;
+        const int num_inputs = dataset.num_inputs;
+        const double ss_tot = dataset.ss_tot;
+
+      
+
+       //degenerate target (constant over sample) -> r^2 undefined
+        if (ss_tot <= 0.0) return 0.0f;
+
+        // --- SS_res: your existing chunked SSE loop, unchanged ---
+        double sse = 0.0;
+        float outputs[CHUNK];
+        // running in groups of 32 - pass in the interperter 32 things to work on at once mirrors a warp 
+        for (int base = 0; base < N; base += CHUNK){
+            const int valid = std::min(CHUNK, N - base);
+
+            Interpreter::run_stateless(
+                prog.instructions,
+                prog.length,
+                &dataset.inputs[base * num_inputs],
+                num_inputs,
+                outputs
+            );
+
+            for (int c = 0; c < valid; ++c){
+                const double err = double(outputs[c]) - double(dataset.targets[base + c]);
+                sse += err * err;
+            }
+        }
+
+        // Guard non-finite SSE (program produced inf/nan) before the divide.
+        if (!std::isfinite(sse)) return 0.0f;
+
+        return float(1.0 - sse / ss_tot);
+    }
+
 }

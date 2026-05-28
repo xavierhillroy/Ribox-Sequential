@@ -197,5 +197,6 @@ private:
 
 namespace Fitness {
     float mse_to_fitness(float mse);
+    float r2_to_fitness(float r2);
 }
 #endif  // LGP_ENGINE_H

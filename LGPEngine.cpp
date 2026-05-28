@@ -62,7 +62,7 @@ void LGPEngine::evaluate_all_sr(const Dataset& dataset){
     for (int agent = 0; agent < LGPConfig::POPULATION_SIZE; ++agent){
         if(std::isnan(cur_fitness()[agent])){
             const ProgramView prog = view_program(agent);
-            cur_fitness_mutable()[agent] = Fitness::mse_to_fitness(Evaluator::evaluate_sr_mse(prog, dataset));
+            cur_fitness_mutable()[agent] = Fitness::r2_to_fitness(Evaluator::evaluate_sr_r2(prog, dataset));
         }
     }
 }
@@ -71,6 +71,12 @@ float Fitness::mse_to_fitness(float mse){ // converts lower is better mse to hig
     if (!std::isfinite(mse)) return 0.0f;
     return 1.0f / (1.0f + mse);
 
+}
+float Fitness::r2_to_fitness(float r2) {
+    if (!std::isfinite(r2)) return 0.0f;
+    // R² is already higher-is-better and ~bounded above by 1.
+    // Clamp the floor so a terrible model (negative R²) maps to 0, not garbage.
+    return r2 < 0.0f ? 0.0f : r2;
 }
 int LGPEngine::tournament_selection(){
     // select k agents, return the one with the highest fitness 
